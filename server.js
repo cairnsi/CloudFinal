@@ -13,6 +13,11 @@ app.set('view engine', 'handlebars');
 app.enable('trust proxy');
 var request = require('request');
 
+const jwt = require('express-jwt');
+const jwksRsa = require('jwks-rsa');
+const {OAuth2Client} = require('google-auth-library');
+const client = new OAuth2Client(client_id);
+
 var redirect_uri= "http://localhost:8080/oauth";//"https://assignment6-312700.wn.r.appspot.com/oauth";
 var client_id = "916034912784-vmi2ekt46gp1bac0svv4t3acj2rnn8oj.apps.googleusercontent.com";
 var scope = "https://www.googleapis.com/auth/userinfo.profile";
@@ -196,13 +201,9 @@ async function boat_removeLoad(id,boatKey){
 /* ------------- End Boat Model Functions ------------- */
 
 /* ------------- Begin load Model Functions ------------- */
-function post_Load(req){
+function post_Load(req, owner){
     var key = datastore.key(LOAD);
-	var day = ("0" + date.getDate()).slice(-2);
-	var month = ("0" + (date.getMonth() + 1)).slice(-2);
-	var year = date.getFullYear();
-	var formattedDate = month+ "/" + day + "/" + year
-	const new_Load = {"volume": req.body.volume, "content": req.body.content, "carrier": null, "creation_date": formattedDate};
+	const new_Load = {"volume": req.body.volume, "content": req.body.content, "carrier": null, "owner": owner};
 	return datastore.save({"key":key, "data":new_Load}).then(() => {return key});
 }
 
@@ -355,14 +356,43 @@ app.get('/boats/:id', async (req, res) => {
 /* ------------- Load Routes -------------------------- */
 
 app.post('/loads', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+	const ticket = await client.verifyIdToken({idToken,client_id});
+	const payload = ticket.getPayload();
+	userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	contentType = req.header('Content-type');
+	if(contentType != "application/json"){
+		error = {"Error": "only json accepted"}
+		res.status(415).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
-	if(!req.body.volume || !req.body.content){
+	if(!req.body.volume || !req.body.content || req.body.fragile == undefined){
 		error = {"Error": "The request object is missing the required volume or content"}
 		res.status(400).send(error);
 		return;
 	}
 	else{
-	post_Load(req)
+	post_Load(req, userid)
     .then( key => {get_Load(key).then(data => {res.status(201).send(data)});
 		});
 	}
