@@ -26,6 +26,7 @@ const STATE_Key= "STATE";
 
 const BOAT = "boat"
 const LOAD = "load"
+const USER = "USER"
 var address = "";
 let date= new Date();
 
@@ -80,11 +81,25 @@ app.get('/oauth',function(req,res){
 	  url:     'https://people.googleapis.com/v1/people/me?personFields=names',
 	  body: ""
 		}, function(error, response, body){
+			
 		    var obj = JSON.parse(body);
 			context.firstName = obj.names[0].givenName;
 			context.lastName = obj.names[0].familyName;
 			context.id_token = JWTtoken;
-			res.render('Shred',context);
+			idToken = JWTtoken.replace('Bearer ','');
+			client.verifyIdToken({idToken,client_id}).then( ticket => {
+			const payload = ticket.getPayload();
+			userid = payload['sub'];
+			const key = datastore.key([USER, parseInt(userid,10)]);
+			get_User(key).then(user => {
+			if(user ==null){
+				const new_User = {"firstName": obj.names[0].givenName, "lastName": obj.names[0].familyName};
+				datastore.save({"key":key, "data":new_User}).then(() => {res.render('Shred',context);});
+			}else{
+				res.render('Shred',context);
+			}
+			});
+			});
 		});
 	});
 	
@@ -112,6 +127,27 @@ function fromDatastore(item){
     return item;
 	
 }
+
+/*-------------- User Functions ----------------*/
+async function get_User(key){
+	var [user] = await datastore.get(key);
+	if(user == null){
+		return null;
+	}
+	user.id = user.id;
+	return user;
+}
+
+function get_Users(){
+    var q = datastore.createQuery(USER);
+    const results = {};
+	return datastore.runQuery(q).then( (entities) => {
+            results.items = entities[0].map(fromDatastore);
+			return results;
+		});
+}
+
+/*-------------- end User ---------------------*/
 
 /* ------------- Begin Boat Model Functions ------------- */
 function post_Boat(departureLocation, destination, capacity){
@@ -504,6 +540,14 @@ app.delete('/boats/:boat_id/loads/:load_id', async (req, res) => {
 		await datastore.update({"key":load_key, "data":load});
 		res.status(204).end();
 	}
+});
+
+/* ------------- User Routes -------------------------- */
+app.get('/users', async (req, res) => {
+	var users = get_Users()
+	.then( (users) => {
+        res.status(200).json(users.items);
+    });
 });
 
 
