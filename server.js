@@ -266,8 +266,8 @@ function load_boatSelf(item){
 	 return item;
 }
 
-function get_Loads(req){
-    var q = datastore.createQuery(LOAD).limit(3);
+function get_Loads(userId, req){
+    var q = datastore.createQuery(LOAD).filter('owner', '=', userId).limit(3);
     const results = {};
     if(Object.keys(req.query).includes("cursor")){
         q = q.start(req.query.cursor);
@@ -277,7 +277,7 @@ function get_Loads(req){
 			results.items = results.items.map(loadSelf);
 			results.items = results.items.map(load_boatSelf);
             if(entities[1].moreResults !== datastore.NO_MORE_RESULTS ){
-                results.next = "https://" + req.get("host") + "/loads" + "?cursor=" + entities[1].endCursor;
+                results.next = req.protocol + "://" + req.get("host") + "/loads" + "?cursor=" + entities[1].endCursor;
             }
 			return results;
 		});
@@ -401,11 +401,18 @@ app.post('/loads', async (req, res) => {
 	idToken = idToken.replace('Bearer ','');
 	userid = null;
 	try{
-	const ticket = await client.verifyIdToken({idToken,client_id});
-	const payload = ticket.getPayload();
-	userid = payload['sub'];
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
 	} catch (error) {
 		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const key = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(key);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
 		res.status(401).send(error);
 		return;
 	}
@@ -435,6 +442,36 @@ app.post('/loads', async (req, res) => {
 });
 
 app.get('/loads/:id', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(userkey);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	const key = datastore.key([LOAD, parseInt(req.params.id,10)]);
 	load = await get_Load(key);
@@ -442,27 +479,90 @@ app.get('/loads/:id', async (req, res) => {
 		error = {"Error": "No load with this load_id exists"  }
 		res.status(404).send(error);
 		return;
-	}else{
+	}else if(load.owner != userid){
+		error = {"Error": "You are not the owner of this load"}
+		res.status(403).send(error);
+		return;
+	}
+	else{
 		res.status(200).send(load);
 	}
 	
 });
 
 app.get('/loads', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const key = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(key);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
-	var loads = get_Loads(req)
+	var loads = get_Loads(userid, req)
 	.then( (loads) => {
         res.status(200).json(loads);
     });
 });
 
 app.delete('/loads/:id', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(userkey);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	const key = datastore.key([LOAD, parseInt(req.params.id,10)]);
 	load = await get_Load(key);
 	if(load == null){
 		error = {"Error": "No load with this load_id exists" }
 		res.status(404).send(error);
+		return;
+	}else if(load.owner != userid){
+		error = {"Error": "You are not the owner of this load"}
+		res.status(403).send(error);
 		return;
 	}
 	else{
