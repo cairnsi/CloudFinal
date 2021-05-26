@@ -178,7 +178,7 @@ function get_Boats(req){
 			results.items = results.items.map(boatSelf);
 			results.items = results.items.map(boat_loadSelf);
             if(entities[1].moreResults !== datastore.NO_MORE_RESULTS ){
-                results.next = "https://" + req.get("host") + "/boats" + "?cursor=" + entities[1].endCursor;
+                results.next = req.protocol + "://" + req.get("host") + "/boats" + "?cursor=" + entities[1].endCursor;
             }
 			return results;
 		});
@@ -316,6 +316,12 @@ async function delete_Load(id){
 
 /* ------------- Boat Routes -------------------------- */
 app.get('/boats', async (req, res) => {
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	var boats = get_Boats(req)
 	.then( (boats) => {
@@ -326,6 +332,18 @@ app.get('/boats', async (req, res) => {
 
 
 app.post('/boats', async (req, res) => {
+	contentType = req.header('Content-type');
+	if(contentType != "application/json"){
+		error = {"Error": "only json accepted"}
+		res.status(415).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	if(!req.body.departureLocation || !req.body.destination || !req.body.capacity){
 		error = {"Error": "The request object is missing at least one of the required attributes"}
@@ -354,6 +372,18 @@ app.delete('/boats/:id', async (req, res) => {
 });
 
 app.patch('/boats/:id', async (req, res) => {
+	contentType = req.header('Content-type');
+	if(contentType != "application/json"){
+		error = {"Error": "only json accepted"}
+		res.status(415).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	if(!req.body.departureLocation || !req.body.destination || !req.body.capacity){
 		error = {"Error": "The request object is missing at least one of the required attributes"}
@@ -375,6 +405,12 @@ app.patch('/boats/:id', async (req, res) => {
 });
 
 app.get('/boats/:id', async (req, res) => {
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	const key = datastore.key([BOAT, parseInt(req.params.id,10)]);
 	boat = await get_Boat(key);
@@ -571,6 +607,12 @@ app.delete('/loads/:id', async (req, res) => {
 });
 
 app.get('/boats/:boat_id/loads', async (req, res) => {
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	const boat_key = datastore.key([BOAT, parseInt(req.params.boat_id,10)]);
 	[boat] = await datastore.get(boat_key);
@@ -586,6 +628,30 @@ app.get('/boats/:boat_id/loads', async (req, res) => {
 });
 
 app.put('/boats/:boat_id/loads/:load_id', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(userkey);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	const boat_key = datastore.key([BOAT, parseInt(req.params.boat_id,10)]);
 	[boat] = await datastore.get(boat_key);
@@ -594,6 +660,11 @@ app.put('/boats/:boat_id/loads/:load_id', async (req, res) => {
 	if(load == null || boat==null){
 		error = {"Error": "The specified boat and/or load does not exist" }
 		res.status(404).send(error);
+		return;
+	}
+	if(load.owner != userid){
+		error = {"Error": "You are not the owner of this load"}
+		res.status(403).send(error);
 		return;
 	}
 	load.id = load_key.id;
@@ -613,6 +684,30 @@ app.put('/boats/:boat_id/loads/:load_id', async (req, res) => {
 
 
 app.delete('/boats/:boat_id/loads/:load_id', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(userkey);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
 	address = req.protocol + "://" + req.get("host");
 	const boat_key = datastore.key([BOAT, parseInt(req.params.boat_id,10)]);
 	[boat] = await datastore.get(boat_key);
@@ -621,6 +716,11 @@ app.delete('/boats/:boat_id/loads/:load_id', async (req, res) => {
 	if(load == null || boat==null){
 		error = {"Error": "The specified boat and/or load does not exist" }
 		res.status(404).send(error);
+		return;
+	}
+	if(load.owner != userid){
+		error = {"Error": "You are not the owner of this load"}
+		res.status(403).send(error);
 		return;
 	}
 	load.id = load_key.id;
