@@ -327,6 +327,21 @@ async function delete_Load(id){
     return datastore.delete(key);
 }
 
+async function update_Load(id,volume, content, fragile){
+    const key = datastore.key([LOAD, parseInt(id,10)]);
+	load = await get_Load(key);
+	if(volume){
+		load.volume = volume;
+	}
+	if(content){
+		load.content = content;
+	}
+	if(fragile != undefined){
+		load.fragile = fragile;
+	}
+	return datastore.update({"key":key, "data":load}).then(() => {return key});
+}
+
 
 /* ------------- End load Model Functions ------------- */
 
@@ -573,6 +588,114 @@ app.get('/loads/:id', async (req, res) => {
 	}
 	else{
 		res.status(200).send(load);
+	}
+	
+});
+
+app.patch('/loads/:id', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(userkey);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
+	address = req.protocol + "://" + req.get("host");
+	if(!req.body.volume && !req.body.content && req.body.fragile==undefined){
+		error = {"Error": "The request object is missing at least one of the required attributes"}
+		res.status(400).send(error);
+		return;
+	}
+	const key = datastore.key([LOAD, parseInt(req.params.id,10)]);
+	load = await get_Load(key);
+	if(load == null){
+		error = {"Error": "No load with this load_id exists"  }
+		res.status(404).send(error);
+		return;
+	}else if(load.owner != userid){
+		error = {"Error": "You are not the owner of this load"}
+		res.status(403).send(error);
+		return;
+	}
+	else{
+		update_Load(req.params.id,req.body.volume, req.body.content, req.body.fragile).then(key => {get_Load(key).then(data => {res.status(200).send(data)})});
+	}
+	
+});
+
+app.put('/loads/:id', async (req, res) => {
+	idToken = req.header('authorization');
+	if(!idToken){
+		error = {"Error": "token is not present"}
+		res.status(401).send(error);
+		return;
+	}
+	idToken = idToken.replace('Bearer ','');
+	userid = null;
+	try{
+		const ticket = await client.verifyIdToken({idToken,client_id});
+		const payload = ticket.getPayload();
+		userid = payload['sub'];
+	} catch (error) {
+		error = {"Error": "token is not valid"}
+		res.status(401).send(error);
+		return;
+	}
+	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	user = await get_User(userkey);
+	if(user==null){
+		error = {"Error": "This user does not have an account"}
+		res.status(401).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
+	address = req.protocol + "://" + req.get("host");
+	if(!req.body.volume || !req.body.content || req.body.fragile==undefined){
+		error = {"Error": "The request object is missing at least one of the required attributes"}
+		res.status(400).send(error);
+		return;
+	}
+	const key = datastore.key([LOAD, parseInt(req.params.id,10)]);
+	load = await get_Load(key);
+	if(load == null){
+		error = {"Error": "No load with this load_id exists"  }
+		res.status(404).send(error);
+		return;
+	}else if(load.owner != userid){
+		error = {"Error": "You are not the owner of this load"}
+		res.status(403).send(error);
+		return;
+	}
+	else{
+		update_Load(req.params.id,req.body.volume, req.body.content, req.body.fragile).then(key => {get_Load(key).then(data => {res.status(200).send(data)})});
 	}
 	
 });
