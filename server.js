@@ -253,7 +253,7 @@ async function boat_removeLoad(id,boatKey){
 /* ------------- Begin load Model Functions ------------- */
 function post_Load(req, owner){
     var key = datastore.key(LOAD);
-	const new_Load = {"volume": req.body.volume, "content": req.body.content, "carrier": null, "owner": owner};
+	const new_Load = {"volume": req.body.volume, "content": req.body.content, "carrier": null, "owner": owner, "fragile" : req.body.fragile};
 	return datastore.save({"key":key, "data":new_Load}).then(() => {return key});
 }
 
