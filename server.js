@@ -168,7 +168,9 @@ async function get_Boat(key){
 }
 
 function get_Boats(req){
-    var q = datastore.createQuery(BOAT).limit(3);
+	var qq = datastore.createQuery(BOAT);
+	return datastore.runQuery(qq).then( (boats) => {
+    var q = datastore.createQuery(BOAT).limit(5);
     const results = {};
     if(Object.keys(req.query).includes("cursor")){
         q = q.start(req.query.cursor);
@@ -180,8 +182,10 @@ function get_Boats(req){
             if(entities[1].moreResults !== datastore.NO_MORE_RESULTS ){
                 results.next = req.protocol + "://" + req.get("host") + "/boats" + "?cursor=" + entities[1].endCursor;
             }
+			results.totalItems = boats[0].length;
 			return results;
 		});
+	});
 }
 
 async function delete_Boat(id){
@@ -200,10 +204,20 @@ async function delete_Boat(id){
     return datastore.delete(key);
 }
 
-function update_Boat(id,departureLocation, destination, capacity){
+async function update_Boat(id,departureLocation, destination, capacity){
     const key = datastore.key([BOAT, parseInt(id,10)]);
-	const new_Boat = {"departureLocation": departureLocation, "destination": destination, "capacity": capacity};
-	return datastore.update({"key":key, "data":new_Boat}).then(() => {return key});
+	boat = await get_Boat(key);
+	if(departureLocation){
+		boat.departureLocation = departureLocation;
+	}
+	if(destination){
+		boat.destination = destination;
+	}
+	if(capacity){
+		boat.capacity = capacity;
+	}
+	
+	return datastore.update({"key":key, "data":boat}).then(() => {return key});
 }
 
 function boatSelf(item){
@@ -267,7 +281,9 @@ function load_boatSelf(item){
 }
 
 function get_Loads(userId, req){
-    var q = datastore.createQuery(LOAD).filter('owner', '=', userId).limit(3);
+	var qq = datastore.createQuery(LOAD).filter('owner', '=', userId);
+	return datastore.runQuery(qq).then( (loads) => {
+    var q = datastore.createQuery(LOAD).filter('owner', '=', userId).limit(5);
     const results = {};
     if(Object.keys(req.query).includes("cursor")){
         q = q.start(req.query.cursor);
@@ -279,8 +295,10 @@ function get_Loads(userId, req){
             if(entities[1].moreResults !== datastore.NO_MORE_RESULTS ){
                 results.next = req.protocol + "://" + req.get("host") + "/loads" + "?cursor=" + entities[1].endCursor;
             }
+			results.totalItems = loads[0].length;
 			return results;
 		});
+	});
 }
 
 async function delete_Load(id){
@@ -372,6 +390,39 @@ app.delete('/boats/:id', async (req, res) => {
 });
 
 app.patch('/boats/:id', async (req, res) => {
+	contentType = req.header('Content-type');
+	if(contentType != "application/json"){
+		error = {"Error": "only json accepted"}
+		res.status(415).send(error);
+		return;
+	}
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
+	address = req.protocol + "://" + req.get("host");
+	if(!req.body.departureLocation && !req.body.destination && !req.body.capacity){
+		error = {"Error": "The request object is missing at least one of the required attributes"}
+		res.status(400).send(error);
+		return;
+	}
+	else{
+		const key = datastore.key([BOAT, parseInt(req.params.id,10)]);
+		boat = await get_Boat(key);
+		if(boat == null){
+			error = {"Error": "No boat with this boat_id exists"}
+			res.status(404).send(error);
+			return;
+		}else{
+			update_Boat(req.params.id,req.body.departureLocation, req.body.destination, req.body.capacity).then(key => {get_Boat(key).then(data => {res.status(200).send(data)});
+			});
+		}
+	}
+});
+
+app.put('/boats/:id', async (req, res) => {
 	contentType = req.header('Content-type');
 	if(contentType != "application/json"){
 		error = {"Error": "only json accepted"}
