@@ -248,6 +248,16 @@ async function boat_removeLoad(id,boatKey){
 	datastore.save({"key":boatKey, "data":boat});
 }
 
+async function getBoatUsedCapacity(boat){
+	var capacityTaken = 0;
+	for(i=0;i < boat.loads.length; i++){
+		const key = datastore.key([LOAD, parseInt(boat.loads[i].id,10)]);
+		load = await get_Load(key);
+		capacityTaken = capacityTaken + load.volume;
+	}
+	return capacityTaken;
+}
+
 /* ------------- End Boat Model Functions ------------- */
 
 /* ------------- Begin load Model Functions ------------- */
@@ -423,18 +433,29 @@ app.patch('/boats/:id', async (req, res) => {
 		res.status(400).send(error);
 		return;
 	}
-	else{
-		const key = datastore.key([BOAT, parseInt(req.params.id,10)]);
+	
+	const key = datastore.key([BOAT, parseInt(req.params.id,10)]);
 		boat = await get_Boat(key);
-		if(boat == null){
-			error = {"Error": "No boat with this boat_id exists"}
-			res.status(404).send(error);
+	
+	
+	if(boat == null){
+		error = {"Error": "No boat with this boat_id exists"}
+		res.status(404).send(error);
+		return;
+	}
+	var boatCapacityTaken = await getBoatUsedCapacity(boat);
+	if(req.body.capacity){
+		if(boatCapacityTaken> req.body.capacity){
+			error = {"Error": "Too much cargo on this boat to set the capacity this low"}
+			res.status(400).send(error);
 			return;
-		}else{
-			update_Boat(req.params.id,req.body.departureLocation, req.body.destination, req.body.capacity).then(key => {get_Boat(key).then(data => {res.status(200).send(data)});
-			});
 		}
 	}
+	
+	update_Boat(req.params.id,req.body.departureLocation, req.body.destination, req.body.capacity).then(key => {get_Boat(key).then(data => {res.status(200).send(data)});
+		});
+	
+	
 });
 
 app.put('/boats/:id', async (req, res) => {
@@ -456,18 +477,26 @@ app.put('/boats/:id', async (req, res) => {
 		res.status(400).send(error);
 		return;
 	}
-	else{
-		const key = datastore.key([BOAT, parseInt(req.params.id,10)]);
+	const key = datastore.key([BOAT, parseInt(req.params.id,10)]);
 		boat = await get_Boat(key);
-		if(boat == null){
-			error = {"Error": "No boat with this boat_id exists"}
-			res.status(404).send(error);
-			return;
-		}else{
-			update_Boat(req.params.id,req.body.departureLocation, req.body.destination, req.body.capacity).then(key => {get_Boat(key).then(data => {res.status(200).send(data)});
-			});
-		}
+	
+	
+	if(boat == null){
+		error = {"Error": "No boat with this boat_id exists"}
+		res.status(404).send(error);
+		return;
 	}
+		
+	var boatCapacityTaken = await getBoatUsedCapacity(boat);
+	if(boatCapacityTaken> req.body.capacity){
+		error = {"Error": "Too much cargo on this boat to set the capacity this low"}
+		res.status(400).send(error);
+		return;
+	}else{
+		update_Boat(req.params.id,req.body.departureLocation, req.body.destination, req.body.capacity).then(key => {get_Boat(key).then(data => {res.status(200).send(data)});
+		});
+	}
+
 });
 
 app.get('/boats/:id', async (req, res) => {
@@ -839,6 +868,12 @@ app.put('/boats/:boat_id/loads/:load_id', async (req, res) => {
 	if(load.owner != userid){
 		error = {"Error": "You are not the owner of this load"}
 		res.status(403).send(error);
+		return;
+	}
+	var boatCapacityTaken = await getBoatUsedCapacity(boat);
+	if(boat.capacity-boatCapacityTaken< load.volume){
+		error = {"Error": "Not enough room on this boat"}
+		res.status(400).send(error);
 		return;
 	}
 	load.id = load_key.id;
