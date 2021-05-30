@@ -90,12 +90,16 @@ app.get('/oauth',function(req,res){
 			client.verifyIdToken({idToken,client_id}).then( ticket => {
 			const payload = ticket.getPayload();
 			userid = payload['sub'];
-			const key = datastore.key([USER, parseInt(userid,10)]);
+			console.log(userid);
+			const key = datastore.key([USER, userid]);
+			console.log(key.name);
 			get_User(key).then(user => {
 			if(user ==null){
+				console.log("user not found");
 				const new_User = {"firstName": obj.names[0].givenName, "lastName": obj.names[0].familyName};
 				datastore.save({"key":key, "data":new_User}).then(() => {res.render('Shred',context);});
 			}else{
+				console.log("user was found");
 				res.render('Shred',context);
 			}
 			});
@@ -128,13 +132,20 @@ function fromDatastore(item){
 	
 }
 
+function userfromDatastore(item){
+	console.log(item);
+    item.id = item[Datastore.KEY].name;
+    return item;
+	
+}
+
 /*-------------- User Functions ----------------*/
 async function get_User(key){
 	var [user] = await datastore.get(key);
 	if(user == null){
 		return null;
 	}
-	user.id = user.id;
+	user.id = key.name;
 	return user;
 }
 
@@ -142,7 +153,7 @@ function get_Users(){
     var q = datastore.createQuery(USER);
     const results = {};
 	return datastore.runQuery(q).then( (entities) => {
-            results.items = entities[0].map(fromDatastore);
+            results.items = entities[0].map(userfromDatastore);
 			return results;
 		});
 }
@@ -540,7 +551,7 @@ app.post('/loads', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const key = datastore.key([USER, parseInt(userid,10)]);
+	const key = datastore.key([USER,userid]);
 	user = await get_User(key);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
@@ -561,7 +572,7 @@ app.post('/loads', async (req, res) => {
 	}
 	address = req.protocol + "://" + req.get("host");
 	if(!req.body.volume || !req.body.content || req.body.fragile == undefined){
-		error = {"Error": "The request object is missing the required volume or content"}
+		error = {"Error": "The request object is missing the required data"}
 		res.status(400).send(error);
 		return;
 	}
@@ -590,7 +601,7 @@ app.get('/loads/:id', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	const userkey = datastore.key([USER, userid]);
 	user = await get_User(userkey);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
@@ -639,11 +650,17 @@ app.patch('/loads/:id', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	const userkey = datastore.key([USER, userid]);
 	user = await get_User(userkey);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
 		res.status(401).send(error);
+		return;
+	}
+	contentType = req.header('Content-type');
+	if(contentType != "application/json"){
+		error = {"Error": "only json accepted"}
+		res.status(415).send(error);
 		return;
 	}
 	acceptType = req.header('Accept');
@@ -693,11 +710,17 @@ app.put('/loads/:id', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	const userkey = datastore.key([USER, userid]);
 	user = await get_User(userkey);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
 		res.status(401).send(error);
+		return;
+	}
+	contentType = req.header('Content-type');
+	if(contentType != "application/json"){
+		error = {"Error": "only json accepted"}
+		res.status(415).send(error);
 		return;
 	}
 	acceptType = req.header('Accept');
@@ -747,7 +770,7 @@ app.get('/loads', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const key = datastore.key([USER, parseInt(userid,10)]);
+	const key = datastore.key([USER, userid]);
 	user = await get_User(key);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
@@ -785,7 +808,7 @@ app.delete('/loads/:id', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	const userkey = datastore.key([USER, userid]);
 	user = await get_User(userkey);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
@@ -848,7 +871,7 @@ app.put('/boats/:boat_id/loads/:load_id', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	const userkey = datastore.key([USER, userid]);
 	user = await get_User(userkey);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
@@ -910,7 +933,7 @@ app.delete('/boats/:boat_id/loads/:load_id', async (req, res) => {
 		res.status(401).send(error);
 		return;
 	}
-	const userkey = datastore.key([USER, parseInt(userid,10)]);
+	const userkey = datastore.key([USER, userid]);
 	user = await get_User(userkey);
 	if(user==null){
 		error = {"Error": "This user does not have an account"}
