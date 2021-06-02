@@ -59,6 +59,7 @@ app.get('/',function(req,res){
 });
 
 app.get('/oauth',function(req,res){
+	try{
   if(!checkState(req.query.state)){
 		error = {"Error": "The state value was not correct. "}
 		res.status(400).send(error);
@@ -73,6 +74,7 @@ app.get('/oauth',function(req,res){
   url:     'https://oauth2.googleapis.com/token',
   body:    body
 	}, function(error, response, body){
+		try{
 	  var obj = JSON.parse(body);
 	  var JWTtoken = obj.id_token;
 	  var token = 'Bearer ' + obj.access_token;
@@ -81,7 +83,7 @@ app.get('/oauth',function(req,res){
 	  url:     'https://people.googleapis.com/v1/people/me?personFields=names',
 	  body: ""
 		}, function(error, response, body){
-			
+			try{
 		    var obj = JSON.parse(body);
 			context.firstName = obj.names[0].givenName;
 			context.lastName = obj.names[0].familyName;
@@ -90,22 +92,27 @@ app.get('/oauth',function(req,res){
 			client.verifyIdToken({idToken,client_id}).then( ticket => {
 			const payload = ticket.getPayload();
 			userid = payload['sub'];
-			console.log(userid);
 			const key = datastore.key([USER, userid]);
-			console.log(key.name);
 			get_User(key).then(user => {
 			if(user ==null){
-				console.log("user not found");
 				const new_User = {"firstName": obj.names[0].givenName, "lastName": obj.names[0].familyName};
 				datastore.save({"key":key, "data":new_User}).then(() => {res.render('Shred',context);});
 			}else{
-				console.log("user was found");
 				res.render('Shred',context);
 			}
 			});
 			});
+			}catch (error) {
+		res.render('Home',context);
+	}
 		});
+		}catch (error) {
+		res.render('Home',context);
+	}
 	});
+	}catch (error) {
+		res.render('Home',context);
+	}
 	
 });
 
@@ -133,7 +140,6 @@ function fromDatastore(item){
 }
 
 function userfromDatastore(item){
-	console.log(item);
     item.id = item[Datastore.KEY].name;
     return item;
 	
