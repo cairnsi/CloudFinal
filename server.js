@@ -18,7 +18,7 @@ const jwksRsa = require('jwks-rsa');
 const {OAuth2Client} = require('google-auth-library');
 const client = new OAuth2Client(client_id);
 
-var redirect_uri= "http://localhost:8080/oauth";//"https://assignment6-312700.wn.r.appspot.com/oauth";
+var redirect_uri= "https://assignment6-312700.wn.r.appspot.com/oauth";
 var client_id = "916034912784-vmi2ekt46gp1bac0svv4t3acj2rnn8oj.apps.googleusercontent.com";
 var scope = "https://www.googleapis.com/auth/userinfo.profile";
 client_secret = "81GIJ6ztg99K7LzYAsaX_nxo";
@@ -982,6 +982,12 @@ app.delete('/boats/:boat_id/loads/:load_id', async (req, res) => {
 
 /* ------------- User Routes -------------------------- */
 app.get('/users', async (req, res) => {
+	acceptType = req.header('Accept');
+	if(acceptType != "application/json"){
+		error = {"Error": "only json returned"}
+		res.status(406).send(error);
+		return;
+	}
 	var users = get_Users()
 	.then( (users) => {
         res.status(200).json(users.items);
